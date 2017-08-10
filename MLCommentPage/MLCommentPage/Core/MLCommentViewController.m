@@ -8,15 +8,14 @@
 #import "MLCommentViewController.h"
 #import "MLComment.h"
 #import "MJRefresh.h"
-#import "DataRequest.h"
+#import "UIViewController+AnimationHUD.h"
 
-@interface MLCommentViewController ()<CommentContentCell_Delegate,UITableViewDelegate, UITableViewDataSource, UIScrollViewDelegate, DataRequestDelegate>
+@interface MLCommentViewController ()<CommentContentCell_Delegate,UITableViewDelegate, UITableViewDataSource, UIScrollViewDelegate,UIScrollViewDelegate>
 {
     BOOL _didAddTimer;
     BOOL isLoadMore;
     BOOL isRefresh;
 }
-
 @property (strong, nonatomic) UITableView *commentTable;
 @property (nonatomic, strong) MLCommentContentList *commentContentList;
 @property (nonatomic, strong) NSMutableArray *expandedIndexPath;
@@ -31,15 +30,18 @@
     [super viewDidLoad];
     [self initData];
 }
-
+- (void)setup {
+    self.view.backgroundColor = [UIColor whiteColor];
+    [self.view addSubview:self.commentTable];
+}
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    [self setup];
     if (self.servers && self.parameter) {
          [self loadCommentData];   
     }
 }
 - (void)initData {
-    [self.view addSubview:self.commentTable];
     self.commentContentList = ([[MLCommentContentList alloc] init]);
     self.page = 1;
     [UIApplication sharedApplication].statusBarStyle = UIStatusBarStyleLightContent;
@@ -49,7 +51,29 @@
 {
     NSMutableDictionary *param = self.parameter.mutableCopy;
     [param setObject:@(_page) forKey:@"page"];
-//    [NewsCommentList requestDataWithDelegate:self parameters:param];
+    NSString *urlString = [self.requestUrl stringByAppendingString:[NSString stringWithFormat:@"&page=%@",@(_page)]];
+    
+    NSURL *url = [NSURL URLWithString:urlString];
+    //生成连接
+    NSURLRequest *urlRequest = [NSURLRequest requestWithURL:url];
+    
+    //建立连接并接收返回数据(异步执行)
+    NSOperationQueue *queue = [[NSOperationQueue alloc] init];
+    [NSURLConnection sendAsynchronousRequest:urlRequest queue:queue completionHandler:^(NSURLResponse *response, NSData *data, NSError *connectionError)
+     {
+         NSDictionary *json;
+         if (data){
+             [self.commentTable.mj_header endRefreshing];
+             [self.commentTable.mj_footer endRefreshing];
+             json = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingMutableContainers error:nil];
+             NSDictionary* data = [json objectForKey:@"result"];
+             [self parseData:data];
+             if (_delegate && [_delegate respondsToSelector:@selector(commentViewController:commentListDidFinishLoadWithPage:)]) {
+                 [_delegate commentViewController:self commentListDidFinishLoadWithPage:_page];
+             }
+             
+         }
+     }];
 }
 
 
@@ -142,28 +166,31 @@
         }
         
     }
-    
+    if (!self.commentContentList.countOfHotList && !self.commentContentList.countOfOrderList) {
+        [self showMessage:@"当前没人评论"];
+    }else {
     [self.commentTable reloadData];
+    }
 
 }
 
 #pragma mark - requestDelegate
 
-- (void)requestFinished:(BaseDataRequest *)request {
-    NSDictionary* data = [request.json objectForKey:@"result"];
-    [self parseData:data];
-    [self showTip:YES];
-    if (_delegate && [_delegate respondsToSelector:@selector(commentViewController:commentListDidFinishLoadWithPage:)]) {
-        [_delegate commentViewController:self commentListDidFinishLoadWithPage:_page];
-    }
-}
-
-- (void)requestFailed:(BaseDataRequest *)request {
-    [self showTip:NO];
-    if (_delegate && [_delegate respondsToSelector:@selector(commentViewController:commentListDidFailLoadWithError:page:)]) {
-        [_delegate commentViewController:self commentListDidFailLoadWithError:request.error page:_page];
-    }
-}
+//- (void)requestFinished:(BaseDataRequest *)request {
+//    NSDictionary* data = [request.json objectForKey:@"result"];
+//    [self parseData:data];
+//    [self showTip:YES];
+//    if (_delegate && [_delegate respondsToSelector:@selector(commentViewController:commentListDidFinishLoadWithPage:)]) {
+//        [_delegate commentViewController:self commentListDidFinishLoadWithPage:_page];
+//    }
+//}
+//
+//- (void)requestFailed:(BaseDataRequest *)request {
+//    [self showTip:NO];
+//    if (_delegate && [_delegate respondsToSelector:@selector(commentViewController:commentListDidFailLoadWithError:page:)]) {
+//        [_delegate commentViewController:self commentListDidFailLoadWithError:request.error page:_page];
+//    }
+//}
 
 #pragma mark - CommentContentCell_Delegate
 // 展开盖楼
@@ -523,6 +550,33 @@
     return 2;
 }
 
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    if (_delegate && [_delegate respondsToSelector:@selector(hideKeyBoard)]) {
+        [_delegate hideKeyBoard];
+    }
+}
+- (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+    if (_delegate && [_delegate respondsToSelector:@selector(hideKeyBoard)]) {
+        [_delegate hideKeyBoard];
+    }
+}
+
+- (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView {
+    if (_delegate && [_delegate respondsToSelector:@selector(scrollViewWillBeginDragging)]) {
+        [_delegate scrollViewWillBeginDragging];
+    }
+}
+- (void)scrollViewDidEndDragging:(UIScrollView *)scrollView willDecelerate:(BOOL)decelerate {
+    if (_delegate && [_delegate respondsToSelector:@selector(scrollViewDidEndDecelerating)]) {
+        [_delegate scrollViewDidEndDecelerating];
+    }
+}
+
+- (void)scrollViewDidEndDecelerating:(UIScrollView *)scrollView {
+    if (_delegate && [_delegate respondsToSelector:@selector(scrollViewDidEndDecelerating)]) {
+        [_delegate scrollViewDidEndDecelerating];
+    }
+}
 
 #pragma mark - lazy
 - (UITableView *)commentTable {
@@ -541,7 +595,6 @@
     }
     return _commentTable;
 }
-
 - (void)dealloc {
     
     [[NSNotificationCenter defaultCenter] removeObserver:self];

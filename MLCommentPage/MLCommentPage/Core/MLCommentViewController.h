@@ -35,13 +35,18 @@ typedef void(^CalculateBlock) (CGFloat height);
 
 @protocol MLCommentViewControllerDelegate <NSObject>
 // 点击回复抛出选中对象数据
-- (void)commentViewController:(MLCommentViewController *)vc commentReply:(id)data;
+- (void)commentViewController:(MLCommentViewController *)vc commentReply:(MLComment *)comment;
 // 点赞抛出选中对象数据
-- (void)commentSupporController:(MLCommentViewController *)vc comment:(id)data callBack:(supporBlock)back;
+- (void)commentSupporController:(MLCommentViewController *)vc comment:(MLComment *)comment callBack:(supporBlock)back;
 - (void)commentViewController:(MLCommentViewController *)vc tabelViewContentSize:(CGSize)contentSize;
 // 评论加载成功
 - (void)commentViewController:(MLCommentViewController *)vc commentListDidFinishLoadWithPage:(NSInteger)page;
 // 评论加载失败
 - (void)commentViewController:(MLCommentViewController *)vc commentListDidFailLoadWithError:(NSError*)error page:(NSInteger)page;
 
+- (void)hideKeyBoard;
+
+- (void)scrollViewWillBeginDragging;
+
+- (void)scrollViewDidEndDecelerating;
 @end
